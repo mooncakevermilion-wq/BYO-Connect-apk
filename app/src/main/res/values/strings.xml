@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">BYO Connect</string>
+    <string name="offline_title">No Internet Connection</string>
+    <string name="offline_desc">Unable to connect to BYO Connect. Check your network or Wi-Fi and tap retry.</string>
+    <string name="offline_retry">Retry Connection</string>
+    <string name="file_chooser_title">Upload Image to BYO Connect</string>
+    <string name="take_photo">Take Photo with Camera</string>
+    <string name="choose_from_gallery">Choose from Gallery</string>
+    <string name="permission_camera_rationale">Camera permission is required to capture photos directly.</string>
+    <string name="error_whatsapp_not_installed">WhatsApp is not installed. Opening in browser instead.</string>
+    <string name="notification_channel_name">BYO Connect Updates</string>
+    <string name="notification_channel_desc">Receive instant updates, announcements, and messages from BYO Connect.</string>
+</resources>

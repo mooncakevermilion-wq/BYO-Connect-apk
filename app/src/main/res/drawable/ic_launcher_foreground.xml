@@ -1,0 +1,47 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer hexagon ring in cyan -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00F2EA"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M54,26 L78,40 L78,68 L54,82 L30,68 L30,40 Z" />
+
+    <!-- Inner connection links -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00A8A2"
+        android:strokeWidth="1.8"
+        android:pathData="M54,38 L54,54 M54,54 L40,66 M54,54 L68,66 M40,46 L54,54 M68,46 L54,54" />
+
+    <!-- Center node -->
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M54,54m-8,0a8,8 0,1,1 16,0a8,8 0,1,1 -16,0" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M54,54m-3.5,0a3.5,3.5 0,1,1 7,0a3.5,3.5 0,1,1 -7,0" />
+
+    <!-- Node circles -->
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M54,38m-4,0a4,4 0,1,1 8,0a4,4 0,1,1 -8,0" />
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M40,66m-4,0a4,4 0,1,1 8,0a4,4 0,1,1 -8,0" />
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M68,66m-4,0a4,4 0,1,1 8,0a4,4 0,1,1 -8,0" />
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M40,46m-3,0a3,3 0,1,1 6,0a3,3 0,1,1 -6,0" />
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M68,46m-3,0a3,3 0,1,1 6,0a3,3 0,1,1 -6,0" />
+</vector>

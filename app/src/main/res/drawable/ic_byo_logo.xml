@@ -1,0 +1,49 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    
+    <!-- Outer hexagon glow ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00F2EA"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M100,20 L169,60 L169,140 L100,180 L31,140 L31,60 Z" />
+
+    <!-- Inner connection nodes and links -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00A8A2"
+        android:strokeWidth="2.5"
+        android:pathData="M100,50 L100,100 M100,100 L60,130 M100,100 L140,130 M60,80 L100,100 M140,80 L100,100" />
+
+    <!-- Center node -->
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M100,100m-14,0a14,14 0,1,1 28,0a14,14 0,1,1 -28,0" />
+
+    <!-- Center core dark dot -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M100,100m-6,0a6,6 0,1,1 12,0a6,6 0,1,1 -12,0" />
+
+    <!-- Satellite connection nodes -->
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M100,50m-7,0a7,7 0,1,1 14,0a7,7 0,1,1 -14,0" />
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M60,130m-7,0a7,7 0,1,1 14,0a7,7 0,1,1 -14,0" />
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M140,130m-7,0a7,7 0,1,1 14,0a7,7 0,1,1 -14,0" />
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M60,80m-5,0a5,5 0,1,1 10,0a5,5 0,1,1 -10,0" />
+    <path
+        android:fillColor="#00F2EA"
+        android:pathData="M140,80m-5,0a5,5 0,1,1 10,0a5,5 0,1,1 -10,0" />
+</vector>
