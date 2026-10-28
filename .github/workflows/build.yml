@@ -1,105 +1,37 @@
-name: Build BYO Connect APK
+name: Deploy BYO Connect to Pages
+
 on:
-  workflow_dispatch:
   push:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          path: '.'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Create Android Project
-        run: |
-          mkdir -p app/src/main/java/com/byoconnect/bulawayo
-          
-          # Create build.gradle
-          cat > app/build.gradle << 'EOF'
-          plugins { id 'com.android.application' }
-          android {
-            compileSdk 34
-            namespace 'com.byoconnect.bulawayo'
-            defaultConfig {
-              applicationId "com.byoconnect.bulawayo"
-              minSdk 21
-              targetSdk 34
-              versionCode 1
-              versionName "1.0"
-            }
-          }
-          dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          EOF
-
-          # Create settings.gradle
-          echo "include ':app'" > settings.gradle
-
-          # Create AndroidManifest.xml
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <uses-permission android:name="android.permission.INTERNET"/>
-            <application android:label="BYO Connect" android:theme="@android:style/Theme.NoTitleBar">
-              <activity android:name=".MainActivity" android:exported="true">
-                <intent-filter>
-                  <action android:name="android.intent.action.MAIN"/>
-                  <category android:name="android.intent.category.LAUNCHER"/>
-                </intent-filter>
-              </activity>
-            </application>
-          </manifest>
-          EOF
-
-          # Create MainActivity.java
-          cat > app/src/main/java/com/byoconnect/bulawayo/MainActivity.java << 'EOF'
-          package com.byoconnect.bulawayo;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          public class MainActivity extends Activity {
-            WebView web;
-            protected void onCreate(Bundle b){
-              super.onCreate(b);
-              web=new WebView(this);
-              web.getSettings().setJavaScriptEnabled(true);
-              web.getSettings().setDomStorageEnabled(true);
-              web.getSettings().setAllowFileAccess(true);
-              web.setWebViewClient(new WebViewClient(){
-                public boolean shouldOverrideUrlLoading(WebView v, String url){
-                  if(url.contains("wa.me") || url.contains("whatsapp")){
-                    try{ startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))); return true; } catch(Exception e){}
-                  }
-                  return false;
-                }
-              });
-              web.loadUrl("https://mooncakevermilion-wq.github.io/BYO-Connect-app/");
-              setContentView(web);
-            }
-            public void onBackPressed(){ if(web.canGoBack()) web.goBack(); else super.onBackPressed(); }
-          }
-          EOF
-
-      - name: Build APK with Gradle
-        uses: gradle/gradle-build-action@v2
-        with:
-          arguments: assembleDebug
-          build-root-directory: .
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: BYO-Connect-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
