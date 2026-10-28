@@ -10,4 +10,6 @@
     <string name="error_whatsapp_not_installed">WhatsApp is not installed. Opening in browser instead.</string>
     <string name="notification_channel_name">BYO Connect Updates</string>
     <string name="notification_channel_desc">Receive instant updates, announcements, and messages from BYO Connect.</string>
+    <string name="share_title">Share BYO Connect</string>
+    <string name="share_button_desc">Share current page link</string>
 </resources>

@@ -40,6 +40,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,15 +50,18 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -81,6 +85,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.byoconnect.bulawayo.ui.widget.SafeSwipeRefreshLayout
 import com.byoconnect.bulawayo.fcm.ByoFirebaseMessagingService
 import com.byoconnect.bulawayo.fcm.NotificationHelper
 import com.byoconnect.bulawayo.ui.theme.Black
@@ -205,6 +210,9 @@ class MainActivity : ComponentActivity() {
           },
           onHandleMailto = { url ->
             handleMailtoLink(url)
+          },
+          onShareUrl = { url ->
+            shareCurrentUrl(url)
           }
         )
       }
@@ -389,6 +397,23 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  /**
+   * Shares the current BYO Connect URL with others via the Android system share sheet.
+   */
+  private fun shareCurrentUrl(url: String) {
+    try {
+      val sendIntent = Intent().apply {
+        action = Intent.ACTION_SEND
+        putExtra(Intent.EXTRA_TEXT, url)
+        type = "text/plain"
+      }
+      val shareIntent = Intent.createChooser(sendIntent, getString(R.string.share_title))
+      startActivity(shareIntent)
+    } catch (e: Exception) {
+      Toast.makeText(this, "Unable to share URL", Toast.LENGTH_SHORT).show()
+    }
+  }
+
   private fun isNetworkAvailable(): Boolean {
     val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     val network = cm.activeNetwork ?: return false
@@ -436,6 +461,42 @@ class ByoWebAppInterface(private val context: Context, private val webView: WebV
   }
 }
 
+/**
+ * Injects CSS and JavaScript into the web view to hide the Jekyll GitHub Pages
+ * footer: "This site is open source. Improve this page."
+ */
+fun injectHideOpenSourceFooter(webView: WebView?) {
+  val script = """
+    (function() {
+      function removeOpenSourceFooter() {
+        var style = document.getElementById('byo-hide-footer-style');
+        if (!style && (document.head || document.documentElement)) {
+          style = document.createElement('style');
+          style.id = 'byo-hide-footer-style';
+          style.textContent = '.footer, div.footer { display: none !important; visibility: hidden !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: none !important; }';
+          (document.head || document.documentElement).appendChild(style);
+        }
+        var footers = document.querySelectorAll('.footer, div.footer, footer');
+        for (var i = 0; i < footers.length; i++) {
+          var text = footers[i].innerText || footers[i].textContent || '';
+          if (text.toLowerCase().indexOf('open source') !== -1 || text.toLowerCase().indexOf('improve this page') !== -1) {
+            footers[i].style.setProperty('display', 'none', 'important');
+            footers[i].remove();
+          }
+        }
+      }
+      removeOpenSourceFooter();
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', removeOpenSourceFooter);
+      }
+      if (window.MutationObserver) {
+        new MutationObserver(removeOpenSourceFooter).observe(document.documentElement, { childList: true, subtree: true });
+      }
+    })();
+  """.trimIndent()
+  webView?.evaluateJavascript(script, null)
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun MainScreen(
@@ -445,184 +506,265 @@ fun MainScreen(
   onShowFileChooser: (ValueCallback<Array<Uri>>) -> Unit,
   onHandleWhatsApp: (String) -> Boolean,
   onHandleTel: (String) -> Boolean,
-  onHandleMailto: (String) -> Boolean
+  onHandleMailto: (String) -> Boolean,
+  onShareUrl: (String) -> Unit
 ) {
   var loadProgress by remember { mutableIntStateOf(0) }
   var isInitialSplashVisible by remember { mutableStateOf(true) }
   var hasNetworkError by remember { mutableStateOf(!isOnline) }
   var activeWebView by remember { mutableStateOf<WebView?>(null) }
+  var currentUrl by remember { mutableStateOf(targetUrl) }
 
   Box(
     modifier = Modifier
       .fillMaxSize()
       .background(Black)
-      .windowInsetsPadding(WindowInsets.statusBars)
   ) {
-    AndroidView(
+    Column(
       modifier = Modifier
         .fillMaxSize()
-        .windowInsetsPadding(WindowInsets.navigationBars),
-      factory = { context ->
-        val swipeRefresh = SwipeRefreshLayout(context).apply {
-          setColorSchemeColors(CyanAccent.toArgb(), CyanGlow.toArgb())
-          setProgressBackgroundColorSchemeColor(SurfaceDark.toArgb())
-        }
-
-        val wv = WebView(context).apply {
-          layoutParams = ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-          )
-          setBackgroundColor(Black.toArgb())
-
-          settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = true
-            allowFileAccess = true
-            useWideViewPort = true
-            loadWithOverviewMode = true
-            mediaPlaybackRequiresUserGesture = false
-            cacheMode = WebSettings.LOAD_DEFAULT
-            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            userAgentString = "$userAgentString BYOConnectAndroidApp/1.0"
-          }
-
-          // Register JavaScript Interface bridge for FCM and native controls
-          addJavascriptInterface(ByoWebAppInterface(context, this), "AndroidBridge")
-
-          webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(
-              view: WebView?,
-              request: WebResourceRequest?
-            ): Boolean {
-              val url = request?.url?.toString() ?: return false
-
-              // Handle WhatsApp links
-              if (url.contains("wa.me") || url.contains("whatsapp.com") || url.startsWith("whatsapp://")) {
-                return onHandleWhatsApp(url)
-              }
-
-              // Handle tel links
-              if (url.startsWith("tel:")) {
-                return onHandleTel(url)
-              }
-
-              // Handle mailto links
-              if (url.startsWith("mailto:")) {
-                return onHandleMailto(url)
-              }
-
-              return false
-            }
-
-            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-              super.onPageStarted(view, url, favicon)
-              hasNetworkError = false
-            }
-
-            override fun onPageFinished(view: WebView?, url: String?) {
-              super.onPageFinished(view, url)
-              swipeRefresh.isRefreshing = false
-              isInitialSplashVisible = false
-
-              // Inject FCM token into web app if available
-              val prefs = context.getSharedPreferences(
-                ByoFirebaseMessagingService.PREFS_NAME,
-                Context.MODE_PRIVATE
-              )
-              val token = prefs.getString(ByoFirebaseMessagingService.KEY_FCM_TOKEN, null)
-              if (!token.isNullOrEmpty()) {
-                view?.evaluateJavascript(
-                  "if (typeof window.onFcmTokenReceived === 'function') { window.onFcmTokenReceived('$token'); }",
-                  null
-                )
-              }
-            }
-
-            override fun onReceivedError(
-              view: WebView?,
-              request: WebResourceRequest?,
-              error: WebResourceError?
-            ) {
-              super.onReceivedError(view, request, error)
-              if (request?.isForMainFrame == true) {
-                hasNetworkError = true
-                swipeRefresh.isRefreshing = false
-              }
-            }
-          }
-
-          webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView?, newProgress: Int) {
-              super.onProgressChanged(view, newProgress)
-              loadProgress = newProgress
-              if (newProgress >= 100) {
-                isInitialSplashVisible = false
-              }
-            }
-
-            override fun onShowFileChooser(
-              webView: WebView?,
-              filePathCallback: ValueCallback<Array<Uri>>?,
-              fileChooserParams: FileChooserParams?
-            ): Boolean {
-              if (filePathCallback != null) {
-                onShowFileChooser(filePathCallback)
-                return true
-              }
-              return false
-            }
-          }
-
-          loadUrl(targetUrl)
-        }
-
-        swipeRefresh.addView(wv)
-        swipeRefresh.setOnRefreshListener {
-          hasNetworkError = false
-          wv.reload()
-        }
-        swipeRefresh.setOnChildScrollUpCallback { _, _ ->
-          wv.scrollY > 0
-        }
-
-        activeWebView = wv
-        onRegisterWebView(wv, swipeRefresh)
-        swipeRefresh
-      }
-    )
-
-    // Top Cyan Loading Bar
-    if (loadProgress in 1..99 && !isInitialSplashVisible && !hasNetworkError) {
-      LinearProgressIndicator(
-        progress = { loadProgress / 100f },
-        color = CyanAccent,
-        trackColor = Color.Transparent,
+        .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+      // Native Toolbar with branding and Share button
+      Box(
         modifier = Modifier
           .fillMaxWidth()
-          .height(3.dp)
-          .align(Alignment.TopCenter)
-          .testTag("loading_progress_bar")
-      )
-    }
+          .height(56.dp)
+          .background(Black)
+          .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.CenterStart
+      ) {
+        Row(
+          modifier = Modifier.fillMaxSize(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Image(
+              painter = painterResource(id = R.drawable.ic_byo_logo),
+              contentDescription = "BYO Logo",
+              modifier = Modifier.size(28.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+              text = "BYO Connect",
+              color = TextPrimary,
+              fontSize = 18.sp,
+              fontWeight = FontWeight.Bold,
+              letterSpacing = 0.5.sp
+            )
+          }
 
-    // Styled Dark and Cyan Offline Recovery Screen
-    AnimatedVisibility(
-      visible = hasNetworkError,
-      enter = fadeIn(animationSpec = tween(250)),
-      exit = fadeOut(animationSpec = tween(200))
-    ) {
-      OfflineErrorScreen(
-        onRetry = {
-          hasNetworkError = false
-          activeWebView?.reload()
+          // Native Share Button
+          IconButton(
+            onClick = {
+              val urlToShare = if (currentUrl.isNotEmpty()) currentUrl else targetUrl
+              onShareUrl(urlToShare)
+            },
+            modifier = Modifier.testTag("share_button")
+          ) {
+            Icon(
+              imageVector = Icons.Default.Share,
+              contentDescription = stringResource(id = R.string.share_button_desc),
+              tint = CyanAccent,
+              modifier = Modifier.size(22.dp)
+            )
+          }
         }
-      )
+
+        // Top Cyan Loading Bar positioned at the bottom edge of the toolbar
+        if (loadProgress in 1..99 && !isInitialSplashVisible && !hasNetworkError) {
+          LinearProgressIndicator(
+            progress = { loadProgress / 100f },
+            color = CyanAccent,
+            trackColor = Color.Transparent,
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(2.5.dp)
+              .align(Alignment.BottomCenter)
+              .testTag("loading_progress_bar")
+          )
+        }
+      }
+
+      // WebView Viewport & Offline State
+      Box(
+        modifier = Modifier
+          .weight(1f)
+          .fillMaxWidth()
+      ) {
+        AndroidView(
+          modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.navigationBars),
+          factory = { context ->
+            val swipeRefresh = SafeSwipeRefreshLayout(context).apply {
+              setColorSchemeColors(CyanAccent.toArgb(), CyanGlow.toArgb())
+              setProgressBackgroundColorSchemeColor(SurfaceDark.toArgb())
+            }
+
+            val wv = WebView(context).apply {
+              layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+              )
+              setBackgroundColor(Black.toArgb())
+
+              settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                allowFileAccess = true
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                mediaPlaybackRequiresUserGesture = false
+                cacheMode = WebSettings.LOAD_DEFAULT
+                mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                userAgentString = "$userAgentString BYOConnectAndroidApp/1.0"
+              }
+
+              // Register JavaScript Interface bridge for FCM and native controls
+              addJavascriptInterface(ByoWebAppInterface(context, this), "AndroidBridge")
+
+              webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                  view: WebView?,
+                  request: WebResourceRequest?
+                ): Boolean {
+                  val url = request?.url?.toString() ?: return false
+
+                  // Handle WhatsApp links
+                  if (url.contains("wa.me") || url.contains("whatsapp.com") || url.startsWith("whatsapp://")) {
+                    return onHandleWhatsApp(url)
+                  }
+
+                  // Handle tel links
+                  if (url.startsWith("tel:")) {
+                    return onHandleTel(url)
+                  }
+
+                  // Handle mailto links
+                  if (url.startsWith("mailto:")) {
+                    return onHandleMailto(url)
+                  }
+
+                  return false
+                }
+
+                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                  super.onPageStarted(view, url, favicon)
+                  hasNetworkError = false
+                  if (!url.isNullOrEmpty()) {
+                    currentUrl = url
+                  }
+                }
+
+                override fun onPageCommitVisible(view: WebView?, url: String?) {
+                  super.onPageCommitVisible(view, url)
+                  injectHideOpenSourceFooter(view)
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                  super.onPageFinished(view, url)
+                  swipeRefresh.isRefreshing = false
+                  isInitialSplashVisible = false
+                  if (!url.isNullOrEmpty()) {
+                    currentUrl = url
+                  }
+
+                  // Automatically clean up open source footer
+                  injectHideOpenSourceFooter(view)
+
+                  // Inject FCM token into web app if available
+                  val prefs = context.getSharedPreferences(
+                    ByoFirebaseMessagingService.PREFS_NAME,
+                    Context.MODE_PRIVATE
+                  )
+                  val token = prefs.getString(ByoFirebaseMessagingService.KEY_FCM_TOKEN, null)
+                  if (!token.isNullOrEmpty()) {
+                    view?.evaluateJavascript(
+                      "if (typeof window.onFcmTokenReceived === 'function') { window.onFcmTokenReceived('$token'); }",
+                      null
+                    )
+                  }
+                }
+
+                override fun onReceivedError(
+                  view: WebView?,
+                  request: WebResourceRequest?,
+                  error: WebResourceError?
+                ) {
+                  super.onReceivedError(view, request, error)
+                  if (request?.isForMainFrame == true) {
+                    hasNetworkError = true
+                    swipeRefresh.isRefreshing = false
+                  }
+                }
+              }
+
+              webChromeClient = object : WebChromeClient() {
+                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                  super.onProgressChanged(view, newProgress)
+                  loadProgress = newProgress
+                  if (newProgress > 40) {
+                    injectHideOpenSourceFooter(view)
+                  }
+                  if (newProgress >= 100) {
+                    isInitialSplashVisible = false
+                  }
+                }
+
+                override fun onShowFileChooser(
+                  webView: WebView?,
+                  filePathCallback: ValueCallback<Array<Uri>>?,
+                  fileChooserParams: FileChooserParams?
+                ): Boolean {
+                  if (filePathCallback != null) {
+                    onShowFileChooser(filePathCallback)
+                    return true
+                  }
+                  return false
+                }
+              }
+
+              loadUrl(targetUrl)
+            }
+
+            swipeRefresh.addView(wv)
+            swipeRefresh.setOnRefreshListener {
+              hasNetworkError = false
+              wv.reload()
+            }
+            swipeRefresh.setOnChildScrollUpCallback { _, _ ->
+              wv.canScrollVertically(-1) || wv.scrollY > 0
+            }
+
+            activeWebView = wv
+            onRegisterWebView(wv, swipeRefresh)
+            swipeRefresh
+          }
+        )
+
+        // Styled Dark and Cyan Offline Recovery Screen
+        androidx.compose.animation.AnimatedVisibility(
+          visible = hasNetworkError,
+          enter = fadeIn(animationSpec = tween(250)),
+          exit = fadeOut(animationSpec = tween(200))
+        ) {
+          OfflineErrorScreen(
+            onRetry = {
+              hasNetworkError = false
+              activeWebView?.reload()
+            }
+          )
+        }
+      }
     }
 
     // Splash Screen with Logo BYO Connect, Black Background, Cyan Accent
-    AnimatedVisibility(
+    androidx.compose.animation.AnimatedVisibility(
       visible = isInitialSplashVisible,
       enter = fadeIn(),
       exit = fadeOut(animationSpec = tween(400))
