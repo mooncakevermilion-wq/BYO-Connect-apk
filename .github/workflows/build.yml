@@ -1,37 +1,194 @@
-name: Deploy BYO Connect to Pages
+name: Build BYO Connect
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: "build-and-deploy"
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x ./gradlew
+
+      - name: Run Unit Tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Prepare APK Output Directory
+        run: |
+          mkdir -p apks
+          find app/build/outputs/apk/debug/ -name "*.apk" -exec cp {} apks/byo-connect-debug.apk \;
+          find app/build/outputs/apk/release/ -name "*.apk" -exec cp {} apks/byo-connect-release.apk \;
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: byo-connect-debug-apk
+          path: apks/byo-connect-debug.apk
+          if-no-files-found: warn
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: byo-connect-release-apk
+          path: apks/byo-connect-release.apk
+          if-no-files-found: warn
+
+  deploy-pages:
+    name: Deploy Web Landing Page
+    needs: build-apk
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Create Landing Page
+        run: |
+          mkdir -p public
+          cat << 'EOF' > public/index.html
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>BYO Connect - Android App</title>
+            <style>
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body {
+                background-color: #000000;
+                color: #FFFFFF;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 24px;
+                text-align: center;
+              }
+              .card {
+                background-color: #0D1117;
+                border: 1px solid #30363D;
+                border-radius: 20px;
+                padding: 40px 32px;
+                max-width: 480px;
+                width: 100%;
+                box-shadow: 0 10px 30px rgba(0, 242, 234, 0.1);
+              }
+              .logo {
+                width: 96px;
+                height: 96px;
+                margin-bottom: 24px;
+              }
+              h1 {
+                font-size: 26px;
+                font-weight: 700;
+                margin-bottom: 8px;
+                letter-spacing: 1px;
+              }
+              p {
+                color: #8B949E;
+                font-size: 15px;
+                line-height: 1.5;
+                margin-bottom: 28px;
+              }
+              .btn {
+                display: block;
+                background-color: #00F2EA;
+                color: #000000;
+                text-decoration: none;
+                font-weight: 700;
+                font-size: 16px;
+                padding: 14px 20px;
+                border-radius: 12px;
+                margin-bottom: 12px;
+                transition: transform 0.15s ease, opacity 0.15s ease;
+              }
+              .btn:hover {
+                opacity: 0.9;
+                transform: translateY(-1px);
+              }
+              .btn-secondary {
+                background-color: #161B22;
+                color: #00F2EA;
+                border: 1px solid #00A8A2;
+              }
+              .footer-text {
+                margin-top: 24px;
+                font-size: 13px;
+                color: #6E7681;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <svg class="logo" viewBox="0 0 108 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M54 26L78 40V68L54 82L30 68V40L54 26Z" stroke="#00F2EA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M54 38V54M54 54L40 66M54 54L68 66M40 46L54 54M68 46L54 54" stroke="#00A8A2" stroke-width="2"/>
+                <circle cx="54" cy="54" r="8" fill="#00F2EA"/>
+                <circle cx="54" cy="54" r="3.5" fill="#000000"/>
+                <circle cx="54" cy="38" r="4" fill="#00F2EA"/>
+                <circle cx="40" cy="66" r="4" fill="#00F2EA"/>
+                <circle cx="68" cy="66" r="4" fill="#00F2EA"/>
+              </svg>
+              <h1>BYO CONNECT</h1>
+              <p>Native Android application for Bulawayo's Community Network.</p>
+              <a href="https://mooncakevermilion-wq.github.io/BYO-Connect-app/" class="btn" target="_blank" rel="noopener">Open BYO Connect Web App</a>
+              <a href="https://github.com/${{ github.repository }}/actions" class="btn btn-secondary">Download APKs from GitHub Actions</a>
+              <div class="footer-text">Package: com.byoconnect.bulawayo</div>
+            </div>
+          </body>
+          </html>
+          EOF
+
       - name: Setup Pages
+        continue-on-error: true
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
+      - name: Upload Pages Artifact
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: './public'
 
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
         uses: actions/deploy-pages@v4

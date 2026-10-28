@@ -88,14 +88,8 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.byoconnect.bulawayo.ui.widget.SafeSwipeRefreshLayout
 import com.byoconnect.bulawayo.fcm.ByoFirebaseMessagingService
 import com.byoconnect.bulawayo.fcm.NotificationHelper
-import com.byoconnect.bulawayo.ui.theme.Black
+import androidx.compose.material3.MaterialTheme
 import com.byoconnect.bulawayo.ui.theme.ByoConnectTheme
-import com.byoconnect.bulawayo.ui.theme.CyanAccent
-import com.byoconnect.bulawayo.ui.theme.CyanGlow
-import com.byoconnect.bulawayo.ui.theme.SurfaceCard
-import com.byoconnect.bulawayo.ui.theme.SurfaceDark
-import com.byoconnect.bulawayo.ui.theme.TextPrimary
-import com.byoconnect.bulawayo.ui.theme.TextSecondary
 import com.google.firebase.messaging.FirebaseMessaging
 import java.io.File
 import java.io.IOException
@@ -159,8 +153,8 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
 
-    // Initialize FCM notification channel
-    NotificationHelper.createNotificationChannel(this)
+    // Initialize FCM notification channels (updates and local events)
+    NotificationHelper.createNotificationChannels(this)
 
     // Check for notification deep-link intent
     pendingNotificationUrl = intent?.getStringExtra(ByoFirebaseMessagingService.EXTRA_NOTIFICATION_URL)
@@ -265,15 +259,22 @@ class MainActivity : ComponentActivity() {
         }
       }
 
-      // Automatically subscribe all app users to general community announcements
-      FirebaseMessaging.getInstance().subscribeToTopic("byo_connect_updates")
+      // Automatically subscribe all app users to general community updates and local events
+      FirebaseMessaging.getInstance().subscribeToTopic(ByoFirebaseMessagingService.TOPIC_UPDATES)
         .addOnCompleteListener { task ->
           if (task.isSuccessful) {
-            Log.d(TAG, "Subscribed to byo_connect_updates topic successfully")
+            Log.d(TAG, "Subscribed to ${ByoFirebaseMessagingService.TOPIC_UPDATES} topic successfully")
+          }
+        }
+
+      FirebaseMessaging.getInstance().subscribeToTopic(ByoFirebaseMessagingService.TOPIC_EVENTS)
+        .addOnCompleteListener { task ->
+          if (task.isSuccessful) {
+            Log.d(TAG, "Subscribed to ${ByoFirebaseMessagingService.TOPIC_EVENTS} topic successfully")
           }
         }
     } catch (e: Exception) {
-      Log.w(TAG, "FirebaseMessaging not initialized yet (missing google-services.json)", e)
+      Log.w(TAG, "FirebaseMessaging initialization notice", e)
     }
   }
 
@@ -459,6 +460,34 @@ class ByoWebAppInterface(private val context: Context, private val webView: WebV
       Log.w("ByoWebAppInterface", "Failed to unsubscribe from topic: $topic", e)
     }
   }
+
+  @JavascriptInterface
+  fun subscribeToEvents() {
+    subscribeToTopic(ByoFirebaseMessagingService.TOPIC_EVENTS)
+  }
+
+  @JavascriptInterface
+  fun isNotificationPermissionGranted(): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.POST_NOTIFICATIONS
+      ) == PackageManager.PERMISSION_GRANTED
+    } else {
+      true
+    }
+  }
+
+  @JavascriptInterface
+  fun showLocalEventNotification(title: String, body: String, url: String?) {
+    ByoFirebaseMessagingService.dispatchNotification(
+      context = context,
+      title = title,
+      body = body,
+      targetUrl = url,
+      isEvent = true
+    )
+  }
 }
 
 /**
@@ -514,11 +543,12 @@ fun MainScreen(
   var hasNetworkError by remember { mutableStateOf(!isOnline) }
   var activeWebView by remember { mutableStateOf<WebView?>(null) }
   var currentUrl by remember { mutableStateOf(targetUrl) }
+  val colorScheme = MaterialTheme.colorScheme
 
   Box(
     modifier = Modifier
       .fillMaxSize()
-      .background(Black)
+      .background(colorScheme.background)
   ) {
     Column(
       modifier = Modifier
@@ -530,7 +560,7 @@ fun MainScreen(
         modifier = Modifier
           .fillMaxWidth()
           .height(56.dp)
-          .background(Black)
+          .background(colorScheme.surface)
           .padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart
       ) {
@@ -542,15 +572,24 @@ fun MainScreen(
           Row(
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Image(
-              painter = painterResource(id = R.drawable.ic_byo_logo),
-              contentDescription = "BYO Logo",
-              modifier = Modifier.size(28.dp)
-            )
+            Box(
+              modifier = Modifier
+                .size(32.dp)
+                .background(Color.White, RoundedCornerShape(8.dp))
+                .border(0.5.dp, colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                .padding(2.dp),
+              contentAlignment = Alignment.Center
+            ) {
+              Image(
+                painter = painterResource(id = R.drawable.ic_byo_app_icon),
+                contentDescription = "BYO Logo",
+                modifier = Modifier.fillMaxSize()
+              )
+            }
             Spacer(modifier = Modifier.width(10.dp))
             Text(
               text = "BYO Connect",
-              color = TextPrimary,
+              color = colorScheme.onSurface,
               fontSize = 18.sp,
               fontWeight = FontWeight.Bold,
               letterSpacing = 0.5.sp
@@ -568,7 +607,7 @@ fun MainScreen(
             Icon(
               imageVector = Icons.Default.Share,
               contentDescription = stringResource(id = R.string.share_button_desc),
-              tint = CyanAccent,
+              tint = colorScheme.primary,
               modifier = Modifier.size(22.dp)
             )
           }
@@ -578,7 +617,7 @@ fun MainScreen(
         if (loadProgress in 1..99 && !isInitialSplashVisible && !hasNetworkError) {
           LinearProgressIndicator(
             progress = { loadProgress / 100f },
-            color = CyanAccent,
+            color = colorScheme.primary,
             trackColor = Color.Transparent,
             modifier = Modifier
               .fillMaxWidth()
@@ -601,8 +640,8 @@ fun MainScreen(
             .windowInsetsPadding(WindowInsets.navigationBars),
           factory = { context ->
             val swipeRefresh = SafeSwipeRefreshLayout(context).apply {
-              setColorSchemeColors(CyanAccent.toArgb(), CyanGlow.toArgb())
-              setProgressBackgroundColorSchemeColor(SurfaceDark.toArgb())
+              setColorSchemeColors(colorScheme.primary.toArgb())
+              setProgressBackgroundColorSchemeColor(colorScheme.surface.toArgb())
             }
 
             val wv = WebView(context).apply {
@@ -610,7 +649,7 @@ fun MainScreen(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
               )
-              setBackgroundColor(Black.toArgb())
+              setBackgroundColor(colorScheme.background.toArgb())
 
               settings.apply {
                 javaScriptEnabled = true
@@ -735,7 +774,12 @@ fun MainScreen(
             swipeRefresh.addView(wv)
             swipeRefresh.setOnRefreshListener {
               hasNetworkError = false
-              wv.reload()
+              val current = wv.url
+              if (current.isNullOrEmpty() || current == "about:blank") {
+                wv.loadUrl(targetUrl)
+              } else {
+                wv.reload()
+              }
             }
             swipeRefresh.setOnChildScrollUpCallback { _, _ ->
               wv.canScrollVertically(-1) || wv.scrollY > 0
@@ -744,6 +788,11 @@ fun MainScreen(
             activeWebView = wv
             onRegisterWebView(wv, swipeRefresh)
             swipeRefresh
+          },
+          update = { swipeRefresh ->
+            swipeRefresh.setColorSchemeColors(colorScheme.primary.toArgb())
+            swipeRefresh.setProgressBackgroundColorSchemeColor(colorScheme.surface.toArgb())
+            activeWebView?.setBackgroundColor(colorScheme.background.toArgb())
           }
         )
 
@@ -756,7 +805,12 @@ fun MainScreen(
           OfflineErrorScreen(
             onRetry = {
               hasNetworkError = false
-              activeWebView?.reload()
+              val current = activeWebView?.url
+              if (current.isNullOrEmpty() || current == "about:blank") {
+                activeWebView?.loadUrl(targetUrl)
+              } else {
+                activeWebView?.reload()
+              }
             }
           )
         }
@@ -776,10 +830,12 @@ fun MainScreen(
 
 @Composable
 fun SplashScreenOverlay() {
+  val colorScheme = MaterialTheme.colorScheme
+
   Box(
     modifier = Modifier
       .fillMaxSize()
-      .background(Black)
+      .background(colorScheme.background)
       .testTag("splash_screen_overlay"),
     contentAlignment = Alignment.Center
   ) {
@@ -788,18 +844,27 @@ fun SplashScreenOverlay() {
       verticalArrangement = Arrangement.Center,
       modifier = Modifier.padding(24.dp)
     ) {
-      Image(
-        painter = painterResource(id = R.drawable.ic_byo_logo),
-        contentDescription = "BYO Connect Logo",
-        modifier = Modifier.size(120.dp)
-      )
+      Box(
+        modifier = Modifier
+          .size(140.dp)
+          .background(Color.White, RoundedCornerShape(24.dp))
+          .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(24.dp))
+          .padding(8.dp),
+        contentAlignment = Alignment.Center
+      ) {
+        Image(
+          painter = painterResource(id = R.drawable.byo_logo),
+          contentDescription = "BYO Connect Brand Logo",
+          modifier = Modifier.fillMaxSize()
+        )
+      }
 
       Spacer(modifier = Modifier.height(24.dp))
 
       Text(
         text = "BYO CONNECT",
-        color = TextPrimary,
-        fontSize = 28.sp,
+        color = colorScheme.onBackground,
+        fontSize = 26.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 2.sp
       )
@@ -808,7 +873,7 @@ fun SplashScreenOverlay() {
 
       Text(
         text = "Bulawayo's Community Network",
-        color = CyanAccent,
+        color = colorScheme.primary,
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium,
         letterSpacing = 0.5.sp
@@ -817,8 +882,8 @@ fun SplashScreenOverlay() {
       Spacer(modifier = Modifier.height(36.dp))
 
       LinearProgressIndicator(
-        color = CyanAccent,
-        trackColor = SurfaceDark,
+        color = colorScheme.primary,
+        trackColor = colorScheme.surfaceVariant,
         modifier = Modifier
           .fillMaxWidth(0.45f)
           .height(3.dp)
@@ -831,10 +896,12 @@ fun SplashScreenOverlay() {
 fun OfflineErrorScreen(
   onRetry: () -> Unit
 ) {
+  val colorScheme = MaterialTheme.colorScheme
+
   Box(
     modifier = Modifier
       .fillMaxSize()
-      .background(Black)
+      .background(colorScheme.background)
       .padding(32.dp)
       .testTag("offline_error_screen"),
     contentAlignment = Alignment.Center
@@ -844,21 +911,21 @@ fun OfflineErrorScreen(
       verticalArrangement = Arrangement.Center,
       modifier = Modifier
         .fillMaxWidth()
-        .background(SurfaceDark, RoundedCornerShape(20.dp))
-        .border(1.dp, SurfaceCard, RoundedCornerShape(20.dp))
+        .background(colorScheme.surface, RoundedCornerShape(20.dp))
+        .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(20.dp))
         .padding(32.dp)
     ) {
       Box(
         modifier = Modifier
           .size(72.dp)
-          .background(SurfaceCard, CircleShape)
-          .border(1.5.dp, CyanGlow, CircleShape),
+          .background(colorScheme.primaryContainer, CircleShape)
+          .border(1.dp, colorScheme.primary.copy(alpha = 0.3f), CircleShape),
         contentAlignment = Alignment.Center
       ) {
         Icon(
           imageVector = Icons.Default.WifiOff,
           contentDescription = "Offline Icon",
-          tint = CyanAccent,
+          tint = colorScheme.onPrimaryContainer,
           modifier = Modifier.size(36.dp)
         )
       }
@@ -867,7 +934,7 @@ fun OfflineErrorScreen(
 
       Text(
         text = stringResource(id = R.string.offline_title),
-        color = TextPrimary,
+        color = colorScheme.onSurface,
         fontSize = 20.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center
@@ -877,7 +944,7 @@ fun OfflineErrorScreen(
 
       Text(
         text = stringResource(id = R.string.offline_desc),
-        color = TextSecondary,
+        color = colorScheme.onSurfaceVariant,
         fontSize = 14.sp,
         textAlign = TextAlign.Center,
         lineHeight = 20.sp
@@ -888,8 +955,8 @@ fun OfflineErrorScreen(
       Button(
         onClick = onRetry,
         colors = ButtonDefaults.buttonColors(
-          containerColor = CyanAccent,
-          contentColor = Black
+          containerColor = colorScheme.primary,
+          contentColor = colorScheme.onPrimary
         ),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier

@@ -4,8 +4,8 @@
         <color android:color="@color/black" />
     </item>
     <item
-        android:width="140dp"
-        android:height="140dp"
+        android:width="130dp"
+        android:height="130dp"
         android:gravity="center"
-        android:drawable="@drawable/ic_byo_logo" />
+        android:drawable="@drawable/ic_byo_app_icon" />
 </layer-list>

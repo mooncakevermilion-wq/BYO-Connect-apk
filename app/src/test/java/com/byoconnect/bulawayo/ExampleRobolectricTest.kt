@@ -1,10 +1,18 @@
 package com.byoconnect.bulawayo
 
+import android.app.NotificationManager
 import android.content.Context
 import android.view.MotionEvent
 import androidx.test.core.app.ApplicationProvider
+import com.byoconnect.bulawayo.fcm.ByoFirebaseMessagingService
+import com.byoconnect.bulawayo.fcm.NotificationHelper
+import com.byoconnect.bulawayo.ui.theme.BackgroundDark
+import com.byoconnect.bulawayo.ui.theme.BackgroundLight
+import com.byoconnect.bulawayo.ui.theme.PrimaryDark
+import com.byoconnect.bulawayo.ui.theme.PrimaryLight
 import com.byoconnect.bulawayo.ui.widget.SafeSwipeRefreshLayout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -24,6 +32,29 @@ class ExampleRobolectricTest {
   @Test
   fun testTargetUrlConstant() {
     assertEquals("https://mooncakevermilion-wq.github.io/BYO-Connect-app/", MainActivity.TARGET_URL)
+  }
+
+  @Test
+  fun testThemeColorPaletteResolution() {
+    assertNotNull(PrimaryDark)
+    assertNotNull(PrimaryLight)
+    assertNotNull(BackgroundDark)
+    assertNotNull(BackgroundLight)
+  }
+
+  @Test
+  fun testNotificationChannelsCreation() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    NotificationHelper.createNotificationChannels(context)
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    assertNotNull(notificationManager.getNotificationChannel(NotificationHelper.CHANNEL_UPDATES_ID))
+    assertNotNull(notificationManager.getNotificationChannel(NotificationHelper.CHANNEL_EVENTS_ID))
+  }
+
+  @Test
+  fun testFcmTopicConstants() {
+    assertEquals("byo_connect_updates", ByoFirebaseMessagingService.TOPIC_UPDATES)
+    assertEquals("byo_connect_events", ByoFirebaseMessagingService.TOPIC_EVENTS)
   }
 
   @Test

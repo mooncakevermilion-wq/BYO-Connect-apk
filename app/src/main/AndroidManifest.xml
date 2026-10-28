@@ -78,7 +78,7 @@
         <!-- Default FCM notification channel and icon -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_byo_logo" />
+            android:resource="@drawable/ic_byo_app_icon" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/cyan" />
